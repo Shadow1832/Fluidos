@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solucionador de mecánica de fluidos</title>
+<style>
+:root{--bg:#eef3f5;--card:#fff;--ink:#0f2a35;--mute:#58737e;--pri:#0b5f7a;--priInk:#fff;--line:#cddbe1;--soft:#e3eef2;--bad:#a4262c}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1a20;--card:#14262e;--ink:#e4eff3;--mute:#93aeb8;--pri:#5cc3dc;--priInk:#06222b;--line:#26414c;--soft:#1b3340;--bad:#ff8a8f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+header{max-width:1100px;margin:auto;padding:22px 20px 4px}
+h1{margin:0;font-size:1.6rem;letter-spacing:-.01em}
+h2{margin:0 0 4px;font-size:1.35rem}
+.mute{color:var(--mute);margin:0 0 14px}
+.wrap{display:grid;grid-template-columns:230px 1fr;gap:20px;max-width:1100px;margin:auto;padding:16px 20px 40px}
+nav{display:flex;flex-direction:column;gap:4px;align-self:start;position:sticky;top:12px}
+nav button{text-align:left;padding:10px 12px;border:0;border-left:3px solid transparent;background:none;color:var(--ink);font:inherit;cursor:pointer;border-radius:0 6px 6px 0}
+nav button:hover{background:var(--soft)}
+nav button[aria-current=true]{border-left-color:var(--pri);background:var(--soft);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:14px}
+.card h3{margin:0 0 10px;font-size:1rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.fld span{display:block;font-size:.88rem;color:var(--mute);margin-bottom:3px}
+.row{display:flex;gap:6px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+input{flex:1;min-width:0}
+textarea{width:100%;min-height:84px;resize:vertical}
+:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center}
+button.b{font:inherit;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid var(--pri);background:var(--pri);color:var(--priInk);cursor:pointer}
+button.b.g{background:none;color:var(--pri)}
+.stat{font-size:.9rem;color:var(--mute)}
+#prev{max-width:100%;max-height:300px;border-radius:8px;margin-top:10px;display:none}
+.res{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:12px}
+.res div{background:var(--soft);border-radius:8px;padding:10px 12px}
+.res small{display:block;color:var(--mute)}
+.res b{font-size:1.15rem}
+ol{margin:6px 0 0;padding-left:22px}
+ol li{margin-bottom:6px}
+.err{color:var(--bad);font-weight:600}
+@media (max-width:760px){
+.wrap{grid-template-columns:1fr}
+nav{flex-direction:row;overflow-x:auto;position:static}
+nav button{white-space:nowrap;border-left:0;border-bottom:3px solid transparent;border-radius:6px 6px 0 0}
+nav button[aria-current=true]{border-bottom-color:var(--pri)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Solucionador de mecánica de fluidos</h1>
+  <p class="mute">Elige un tema, escribe el problema o captura los datos, y obtén el resultado con el procedimiento.</p>
+</header>
+<div class="wrap">
+  <nav id="nav" aria-label="Temas"></nav>
+  <main>
+    <h2 id="title"></h2>
+    <p class="mute" id="desc"></p>
+
+    <section class="card">
+      <h3>Problema escrito</h3>
+      <textarea id="ptxt" placeholder="Pega o escribe el problema. Ejemplo: Por una tubería de diámetro 5 cm circula agua con velocidad de 2 m/s. Longitud = 40 m."></textarea>
+      <div class="btns">
+        <button class="b g" id="bparse" type="button">Leer datos del texto</button>
+        <button class="b" id="bia" type="button">Analizar con IA (problema completo)</button>
+        <span class="stat" id="iastat"></span>
+        <span class="stat" id="pstat"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Datos</h3>
+      <label class="fld" style="display:block;max-width:300px;margin-bottom:14px"><span>Fluido (llena ρ y μ, valores aproximados)</span>
+        <select id="fl" style="width:100%"></select></label>
+      <div class="grid" id="fields"></div>
+      <div class="btns">
+        <button class="b" id="bcalc" type="button">Calcular</button>
+        <button class="b g" id="bclear" type="button">Limpiar</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Esquema del sistema (opcional)</h3>
+      <input type="file" id="img" accept="image/*" style="width:100%">
+      <img id="prev" alt="Esquema subido">
+      <p class="stat">La imagen se muestra como referencia. Interpretarla automáticamente llegará con la IA en la fase 2.</p>
+    </section>
+
+    <section class="card" id="plan" hidden></section>
+    <div id="iaout"></div>
+
+    <section class="card" id="out" hidden aria-live="polite">
+      <h3>Resultados</h3>
+      <div class="res" id="res"></div>
+      <h3>Procedimiento</h3>
+      <ol id="steps"></ol>
+    </section>
+  </main>
+</div>
+
+<script>
+const g=9.81,PI=Math.PI,$=id=>document.getElementById(id);
+
+/* ---------- Unidades: [nombre, factor para pasar a SI] ---------- */
+const U={
+  len:[["m",1],["cm",.01],["mm",.001],["in",.0254],["ft",.3048]],
+  vel:[["m/s",1],["cm/s",.01],["ft/s",.3048],["km/h",1/3.6]],
+  flow:[["m³/s",1],["L/s",1e-3],["L/min",1/6e4],["m³/h",1/3600],["gpm",6.30902e-5]],
+  pres:[["Pa",1],["kPa",1e3],["MPa",1e6],["bar",1e5],["atm",101325],["psi",6894.757]],
+  dens:[["kg/m³",1],["g/cm³",1000]],
+  dyn:[["Pa·s",1],["cP",1e-3],["poise",.1]],
+  kin:[["m²/s",1],["cSt",1e-6],["St",1e-4]],
+  pow:[["W",1],["kW",1e3],["hp",745.7]],
+  pct:[["%",.01]],
+  none:[["—",1]]
+};
+const norm=s=>s.toLowerCase().replace(/[\s·^]/g,"").replace(/³/g,"3").replace(/²/g,"2").replace(/µ/g,"u");
+
+/* ---------- Fluidos (ρ en kg/m³, μ en Pa·s, a ~20 °C) ---------- */
+const FL=[["Agua (20 °C)",998,1.002e-3],["Agua de mar",1025,1.08e-3],["Aire (20 °C)",1.204,1.825e-5],["Aceite SAE 30",917,.29],["Mercurio",13546,1.526e-3],["Gasolina",680,2.9e-4],["Glicerina",1260,1.49]];
+const FLNAMES=[["agua de mar",1],["agua",0],["aire",2],["aceite",3],["mercurio",4],["gasolina",5],["glicerina",6]];
+
+/* ---------- Utilidades de salida ---------- */
+let OS=[],OR=[];
+const S=t=>OS.push(t),R=(l,t)=>OR.push([l,t]);
+const OUT={},O=(k,x)=>{OUT[k]=x;};
+const fmt=x=>{if(!isFinite(x))return"∞";const a=Math.abs(x);return a!==0&&(a>=1e6||a<1e-3)?x.toExponential(3).replace("e+","e"):String(+x.toPrecision(5));};
+const pa=x=>`${fmt(x)} Pa (${fmt(x/1000)} kPa)`;
+const pw=x=>`${fmt(x)} W (${fmt(x/1000)} kW = ${fmt(x/745.7)} hp)`;
+const qf=x=>`${fmt(x)} m³/s (${fmt(x*1000)} L/s)`;
+const area=d=>PI*d*d/4;
+
+/* ---------- Definición de campos: F(clave, etiqueta, tipo de unidad, unidad por defecto, alias para el lector, placeholder) ---------- */
+const F=(k,l,t,d,a,o)=>({k,l,t,d,a,o:o||""});
+const RHO=F("rho","Densidad ρ","dens",0,["ρ","rho","densidad"]);
+const MU=F("mu","Viscosidad dinámica μ","dyn",0,["μ","mu","viscosidad dinámica","viscosidad"]);
+const NU=F("nu","Viscosidad cinemática ν","kin",0,["ν","nu","viscosidad cinemática"],"opcional");
+
+/* ---------- MÓDULOS: para agregar un tema nuevo, copia uno de estos bloques ---------- */
+const M=[
+{id:"prop",name:"Propiedades del fluido",desc:"Calcula peso específico, densidad relativa y viscosidad cinemática (o dinámica) a partir de ρ y μ.",
+ f:[RHO,{...MU,o:"opcional"},NU],
+ solve(v){let{rho,mu,nu}=v;
+  if(rho==null&&mu!=null&&nu!=null){rho=mu/nu;S(`ρ = μ/ν = ${fmt(mu)}/${fmt(nu)} = ${fmt(rho)} kg/m³`);R("Densidad ρ",fmt(rho)+" kg/m³");}
+  if(rho==null)throw"Escribe la densidad ρ (o μ y ν juntas).";
+  const gm=rho*g;S(`γ = ρ·g = ${fmt(rho)}·9.81 = ${fmt(gm)} N/m³`);R("Peso específico γ",fmt(gm)+" N/m³");
+  S(`DR = ρ/ρ_agua = ${fmt(rho)}/1000 = ${fmt(rho/1000)}`);R("Densidad relativa",fmt(rho/1000));
+  if(mu!=null&&nu==null){nu=mu/rho;S(`ν = μ/ρ = ${fmt(mu)}/${fmt(rho)} = ${fmt(nu)} m²/s`);R("Viscosidad cinemática ν",fmt(nu)+" m²/s");}
+  else if(nu!=null&&mu==null){mu=nu*rho;S(`μ = ν·ρ = ${fmt(nu)}·${fmt(rho)} = ${fmt(mu)} Pa·s`);R("Viscosidad dinámica μ",fmt(mu)+" Pa·s");}}},
+
+{id:"hidro",name:"Presión hidrostática",desc:"Presión a una profundidad h y, si das el ancho y la altura, fuerza sobre una pared vertical rectangular con la superficie libre arriba.",
+ f:[RHO,F("h","Profundidad h","len",0,["h","profundidad"],"opcional"),F("p0","Presión en la superficie P₀","pres",1,["p0","presión superficial"],"opcional (manométrica = 0)"),F("b","Ancho de la pared b","len",0,["b","ancho"],"opcional"),F("H","Altura de pared sumergida H","len",0,["hpared","altura de pared"],"opcional")],
+ solve(v){const{rho,h,p0,b,H}=v;
+  if(rho==null)throw"Falta la densidad ρ.";
+  if(h==null&&H==null)throw"Escribe la profundidad h, o la altura de pared H.";
+  if(h!=null){const dp=rho*g*h;S(`ΔP = ρ·g·h = ${fmt(rho)}·9.81·${fmt(h)} = ${fmt(dp)} Pa`);R("Presión por la columna de fluido",pa(dp));
+   if(p0!=null){S(`P = P₀ + ρ·g·h = ${fmt(p0)} + ${fmt(dp)} = ${fmt(p0+dp)} Pa`);R("Presión total",pa(p0+dp));}}
+  if(H!=null){if(b==null)throw"Para la fuerza sobre la pared necesito el ancho b.";
+   const F=rho*g*(H/2)*b*H;S(`F = ρ·g·h_c·A = ${fmt(rho)}·9.81·(${fmt(H)}/2)·(${fmt(b)}·${fmt(H)}) = ${fmt(F)} N`);
+   S(`Centro de presión: y_cp = 2H/3 = ${fmt(2*H/3)} m medidos desde la superficie`);
+   R("Fuerza sobre la pared",`${fmt(F)} N (${fmt(F/1000)} kN)`);R("Centro de presión (desde la superficie)",fmt(2*H/3)+" m");}}},
+
+{id:"cont",name:"Continuidad y caudal",desc:"Relaciona caudal, velocidades y diámetros: Q = V·A. Da el diámetro y una velocidad (o el caudal).",
+ f:[F("D1","Diámetro D₁","len",1,["d1","diámetro 1","diametro 1","diámetro","diametro","d"],"opcional"),F("D2","Diámetro D₂","len",1,["d2","diámetro 2","diametro 2"],"opcional"),F("V1","Velocidad V₁","vel",0,["v1","velocidad 1","velocidad","v"],"opcional"),F("V2","Velocidad V₂","vel",0,["v2","velocidad 2"],"opcional"),F("Q","Caudal Q","flow",1,["q","caudal"],"opcional")],
+ solve(v){let{D1,D2,V1,V2,Q}=v;const a1=D1!=null?area(D1):null,a2=D2!=null?area(D2):null;
+  if(a1)S(`A₁ = π·D₁²/4 = ${fmt(a1)} m²`);if(a2)S(`A₂ = π·D₂²/4 = ${fmt(a2)} m²`);
+  if(Q==null){
+   if(V1!=null&&a1){Q=V1*a1;S(`Q = V₁·A₁ = ${fmt(V1)}·${fmt(a1)} = ${fmt(Q)} m³/s`);}
+   else if(V2!=null&&a2){Q=V2*a2;S(`Q = V₂·A₂ = ${fmt(V2)}·${fmt(a2)} = ${fmt(Q)} m³/s`);}
+   else throw"Dame el caudal Q, o una velocidad junto con su diámetro.";}
+  R("Caudal Q",qf(Q));O("Q",Q);
+  if(a1){const x=Q/a1;S(`V₁ = Q/A₁ = ${fmt(Q)}/${fmt(a1)} = ${fmt(x)} m/s`);R("Velocidad V₁",fmt(x)+" m/s");O("V1",x);}
+  if(a2){const x=Q/a2;S(`V₂ = Q/A₂ = ${fmt(Q)}/${fmt(a2)} = ${fmt(x)} m/s`);R("Velocidad V₂",fmt(x)+" m/s");O("V2",x);}}},
+
+{id:"bern",name:"Ecuación de Bernoulli",desc:"P₁/γ + V₁²/2g + z₁ + h_p = P₂/γ + V₂²/2g + z₂ + h_L. Deja vacía exactamente UNA incógnita entre P₁, V₁, z₁, P₂, V₂, z₂. Usa presiones manométricas (a la atmósfera = 0).",
+ f:[RHO,F("P1","Presión P₁","pres",1,["p1"],"vacío = incógnita"),F("V1","Velocidad V₁","vel",0,["v1"],"vacío = incógnita"),F("z1","Altura z₁","len",0,["z1"],"vacío = incógnita"),F("P2","Presión P₂","pres",1,["p2"],"vacío = incógnita"),F("V2","Velocidad V₂","vel",0,["v2"],"vacío = incógnita"),F("z2","Altura z₂","len",0,["z2"],"vacío = incógnita"),F("hp","Carga de bomba h_p","len",0,["hp","carga de bomba"],"opcional (0)"),F("hL","Pérdidas h_L","len",0,["hl","pérdidas","perdidas"],"opcional (0)")],
+ solve(v){const k1=["P1","V1","z1"],k2=["P2","V2","z2"],unk=[...k1,...k2].filter(k=>v[k]==null);
+  if(unk.length!==1)throw`Deja vacía exactamente UNA incógnita entre P₁, V₁, z₁, P₂, V₂, z₂ (ahora hay ${unk.length}).`;
+  const u=unk[0],hp=v.hp??0,hL=v.hL??0,rho=v.rho;
+  const needRho=[...k1,...k2].some(k=>k[0]=="P"&&(v[k]==null||v[k]!==0));
+  if(rho==null&&needRho)throw"Falta la densidad ρ (hay presiones distintas de cero).";
+  const gm=rho!=null?rho*g:1;if(rho!=null)S(`γ = ρ·g = ${fmt(rho)}·9.81 = ${fmt(gm)} N/m³`);
+  const tm=(k,x)=>k[0]=="P"?x/gm:k[0]=="V"?x*x/(2*g):x;
+  const sum=(ks,e)=>ks.reduce((a,k)=>k==u?a:a+tm(k,v[k]),e);
+  const s1=sum(k1,hp),s2=sum(k2,hL),t=k1.includes(u)?s2-s1:s1-s2;
+  S(`Energía conocida del lado 1 (con h_p) = ${fmt(s1)} m; del lado 2 (con h_L) = ${fmt(s2)} m`);
+  S(`El término de la incógnita ${u} vale ${fmt(t)} m de columna de fluido`);
+  if(u[0]=="P"){const p=t*gm;S(`${u} = γ·(${fmt(t)}) = ${fmt(p)} Pa`);R("Presión "+u,pa(p));O(u,p);}
+  else if(u[0]=="V"){if(t<0)throw"Sale V² negativa: revisa los datos (signos de z, pérdidas o bomba).";const x=Math.sqrt(2*g*t);S(`${u} = √(2·g·${fmt(t)}) = ${fmt(x)} m/s`);R("Velocidad "+u,fmt(x)+" m/s");O(u,x);}
+  else{S(`${u} = ${fmt(t)} m`);R("Altura "+u,fmt(t)+" m");O(u,t);}}},
+
+{id:"reyn",name:"Número de Reynolds",desc:"Determina si el flujo en tubería es laminar, de transición o turbulento. Da V o Q, el diámetro, y ν (o ρ y μ).",
+ f:[F("V","Velocidad V","vel",0,["v","velocidad"],"o usa Q"),F("D","Diámetro D","len",1,["d","diámetro","diametro"]),F("Q","Caudal Q","flow",1,["q","caudal"],"o usa V"),RHO,{...MU,o:"o usa ν"},NU],
+ solve(v){let{V,D,Q,rho,mu,nu}=v;
+  if(D==null)throw"Falta el diámetro D.";
+  if(V==null&&Q!=null){V=Q/area(D);S(`V = Q/A = ${fmt(Q)}/${fmt(area(D))} = ${fmt(V)} m/s`);}
+  if(V==null)throw"Falta la velocidad V (o el caudal Q).";
+  if(nu==null){if(rho==null||mu==null)throw"Necesito ν, o bien ρ y μ.";nu=mu/rho;S(`ν = μ/ρ = ${fmt(mu)}/${fmt(rho)} = ${fmt(nu)} m²/s`);}
+  O("V",V);O("nu",nu);const Re=V*D/nu;S(`Re = V·D/ν = ${fmt(V)}·${fmt(D)}/${fmt(nu)} = ${fmt(Re)}`);
+  R("Número de Reynolds",fmt(Re));O("Re",Re);
+  const reg=Re<2300?"Laminar (Re < 2300)":Re<4000?"Transición (2300 – 4000)":"Turbulento (Re > 4000)";
+  S("Criterio en tuberías: laminar si Re < 2300, turbulento si Re > 4000");R("Régimen",reg);}},
+
+{id:"darcy",name:"Pérdidas en tuberías",desc:"Darcy-Weisbach: pérdida por fricción y pérdidas menores. Rugosidad típica: PVC 0.0015 mm, acero comercial 0.045 mm, hierro galvanizado 0.15 mm. Si la dejas vacía se toma tubo liso.",
+ f:[F("L","Longitud L","len",0,["l","longitud"]),F("D","Diámetro D","len",1,["d","diámetro","diametro"]),F("V","Velocidad V","vel",0,["v","velocidad"],"o usa Q"),F("Q","Caudal Q","flow",1,["q","caudal"],"o usa V"),F("eps","Rugosidad ε","len",2,["ε","eps","rugosidad"],"opcional (0)"),F("K","Suma de K (pérdidas menores)","none",0,["ΣK","k","sumak"],"opcional (0)"),RHO,MU],
+ solve(v){let{L,D,V,Q,eps,K,rho,mu}=v;
+  if(L==null||D==null)throw"Faltan la longitud L y el diámetro D.";
+  if(rho==null||mu==null)throw"Faltan ρ y μ.";
+  if(V==null&&Q!=null){V=Q/area(D);S(`V = Q/A = ${fmt(Q)}/${fmt(area(D))} = ${fmt(V)} m/s`);}
+  if(!(V>0))throw"Falta la velocidad V (o el caudal Q), y debe ser mayor que 0.";
+  eps=eps??0;K=K??0;const nu=mu/rho,Re=V*D/nu;
+  S(`Re = V·D·ρ/μ = ${fmt(Re)}`);R("Número de Reynolds",fmt(Re));O("Re",Re);
+  let f;
+  if(Re<2300){f=64/Re;S(`Flujo laminar: f = 64/Re = ${fmt(f)}`);}
+  else{const rr=eps/D;f=.25/Math.pow(Math.log10(rr/3.7+5.74/Math.pow(Re,.9)),2);
+   for(let i=0;i<50;i++)f=Math.pow(-2*Math.log10(rr/3.7+2.51/(Re*Math.sqrt(f))),-2);
+   S(`Colebrook (iterado), ε/D = ${fmt(rr)}: 1/√f = −2·log₁₀(ε/D/3.7 + 2.51/(Re·√f)) → f = ${fmt(f)}`);
+   if(Re<4000)S("Aviso: Re está en la zona de transición, el valor de f es solo aproximado.");}
+  R("Factor de fricción f",fmt(f));
+  const hv=V*V/(2*g),hf=f*L/D*hv,hm=K*hv,ht=hf+hm,dp=rho*g*ht;
+  S(`h_f = f·(L/D)·V²/2g = ${fmt(f)}·(${fmt(L)}/${fmt(D)})·${fmt(hv)} = ${fmt(hf)} m`);
+  if(K)S(`h_m = ΣK·V²/2g = ${fmt(K)}·${fmt(hv)} = ${fmt(hm)} m`);
+  S(`h_total = ${fmt(ht)} m → ΔP = ρ·g·h = ${fmt(dp)} Pa`);
+  R("Pérdida por fricción h_f",fmt(hf)+" m");if(K)R("Pérdidas menores h_m",fmt(hm)+" m");
+  R("Pérdida total",fmt(ht)+" m");R("Caída de presión ΔP",pa(dp));O("dP",dp);O("hL",ht);O("V",V);O("f",f);}},
+
+{id:"bomba",name:"Bombas y potencia",desc:"Potencia hidráulica y potencia en el eje. Da el caudal y la carga H (o la presión ΔP que entrega la bomba).",
+ f:[F("Q","Caudal Q","flow",1,["q","caudal"]),F("H","Carga H","len",0,["h","carga","altura"],"o usa ΔP"),F("dP","Presión ΔP","pres",1,["dp","δp","ΔP","diferencia de presión","presión"],"o usa H"),{...RHO,o:"necesaria si usas H"},F("eta","Eficiencia η","pct",0,["η","eta","eficiencia"],"opcional")],
+ solve(v){let{Q,H,dP,rho,eta}=v,Ph;
+  if(Q==null)throw"Falta el caudal Q.";
+  if(dP!=null){Ph=Q*dP;S(`P_hid = Q·ΔP = ${fmt(Q)}·${fmt(dP)} = ${fmt(Ph)} W`);if(rho!=null){H=dP/(rho*g);S(`H = ΔP/(ρ·g) = ${fmt(H)} m`);R("Carga H",fmt(H)+" m");O("H",H);}}
+  else if(H!=null){if(rho==null)throw"Falta la densidad ρ.";Ph=rho*g*Q*H;S(`P_hid = ρ·g·Q·H = ${fmt(rho)}·9.81·${fmt(Q)}·${fmt(H)} = ${fmt(Ph)} W`);}
+  else throw"Dame la carga H o la presión ΔP.";
+  R("Potencia hidráulica",pw(Ph));O("Ph",Ph);
+  if(eta!=null){if(eta<=0||eta>1)throw"La eficiencia debe estar entre 0 y 100 %.";const Pe=Ph/eta;S(`P_eje = P_hid/η = ${fmt(Ph)}/${fmt(eta)} = ${fmt(Pe)} W`);R("Potencia en el eje",pw(Pe));}}},
+
+{id:"lam",name:"Flujo laminar (Hagen-Poiseuille)",nofluid:1,desc:"Q = π·D⁴·ΔP / (128·μ·L) para flujo laminar en tubo circular. Deja vacía exactamente UNA incógnita entre D, L, ΔP, Q y μ. La densidad es opcional y sirve para comprobar que Re < 2300.",
+ f:[F("D","Diámetro D","len",0,["d","diámetro","diametro"],"vacío = incógnita"),F("L","Longitud L","len",0,["l","longitud"],"vacío = incógnita"),F("dP","Diferencia de presión ΔP","pres",0,["dp","δp","ΔP","diferencia de presión relativa","diferencia de presión","presión relativa","presión"],"vacío = incógnita"),F("Q","Caudal Q","flow",0,["q","caudal"],"vacío = incógnita"),{...MU,o:"vacío = incógnita"},{...RHO,o:"opcional (comprobar Re)"}],
+ solve(v){let{D,L,dP,Q,mu,rho}=v;const unk=["D","L","dP","Q","mu"].filter(k=>v[k]==null);
+  if(unk.length!==1)throw`Deja vacía exactamente UNA incógnita entre D, L, ΔP, Q y μ (ahora hay ${unk.length}).`;
+  S("Hagen-Poiseuille: Q = π·D⁴·ΔP / (128·μ·L)");
+  const u=unk[0];
+  if(u=="mu"){mu=PI*D**4*dP/(128*L*Q);S(`μ = π·D⁴·ΔP/(128·L·Q) = π·${fmt(D)}⁴·${fmt(dP)}/(128·${fmt(L)}·${fmt(Q)}) = ${fmt(mu)} Pa·s`);R("Viscosidad dinámica μ",`${fmt(mu)} Pa·s (${fmt(mu*1000)} cP)`);}
+  else if(u=="Q"){Q=PI*D**4*dP/(128*mu*L);S(`Q = π·D⁴·ΔP/(128·μ·L) = ${fmt(Q)} m³/s`);R("Caudal Q",qf(Q));O("Q",Q);}
+  else if(u=="dP"){dP=128*mu*L*Q/(PI*D**4);S(`ΔP = 128·μ·L·Q/(π·D⁴) = ${fmt(dP)} Pa`);R("Diferencia de presión ΔP",pa(dP));}
+  else if(u=="L"){L=PI*D**4*dP/(128*mu*Q);S(`L = π·D⁴·ΔP/(128·μ·Q) = ${fmt(L)} m`);R("Longitud L",fmt(L)+" m");}
+  else{D=Math.pow(128*mu*L*Q/(PI*dP),.25);S(`D = (128·μ·L·Q/(π·ΔP))^(1/4) = ${fmt(D)} m`);R("Diámetro D",`${fmt(D)} m (${fmt(D*100)} cm)`);}
+  const V=Q/area(D);O("mu",mu);O("Q",Q);O("dP",dP);O("L",L);O("D",D);O("V",V);S(`V = Q/A = ${fmt(Q)}/${fmt(area(D))} = ${fmt(V)} m/s`);R("Velocidad media V",fmt(V)+" m/s");
+  if(rho!=null){const Re=rho*V*D/mu;S(`Re = ρ·V·D/μ = ${fmt(Re)}`);R("Número de Reynolds",fmt(Re));O("Re",Re);
+   S(Re<2300?"Re < 2300: el flujo es laminar, la fórmula es válida.":"Aviso: Re ≥ 2300, el flujo NO es laminar y este resultado no es válido.");}
+  else S("Falta comprobar que el flujo sea laminar: Re = ρ·V·D/μ debe ser menor que 2300.");}},
+
+{id:"torr",name:"Torricelli y orificios",desc:"Velocidad de salida por un orificio en un tanque abierto y, si das el diámetro, el caudal.",
+ f:[F("h","Altura del fluido sobre el orificio h","len",0,["h","altura","carga"]),F("d","Diámetro del orificio d","len",1,["d","diámetro","diametro"],"opcional"),F("Cd","Coeficiente de descarga Cd","none",0,["cd"],"opcional (1)")],
+ solve(v){const{h,d,Cd}=v;
+  if(h==null)throw"Falta la altura h.";
+  const V=Math.sqrt(2*g*h);S(`V = √(2·g·h) = √(2·9.81·${fmt(h)}) = ${fmt(V)} m/s`);R("Velocidad de salida",fmt(V)+" m/s");O("V",V);
+  if(d!=null){const c=Cd??1,A=area(d),Q=c*A*V;S(`Q = Cd·A·V = ${fmt(c)}·${fmt(A)}·${fmt(V)} = ${fmt(Q)} m³/s`);R("Caudal Q",qf(Q));O("Q",Q);}}}
+];
+
+/* ---------- Interfaz ---------- */
+let cur=M[0];
+const read=f=>{const t=$("i_"+f.k).value.trim().replace(",",".");if(t==="")return null;
+  const n=Number(t);if(isNaN(n))throw`"${f.l}" no es un número válido.`;
+  return n*U[f.t][$("u_"+f.k).selectedIndex][1];};
+
+function applyFluid(){const i=$("fl").value;if(i==="c"||cur.nofluid)return;const[,r,m]=FL[+i];
+  [["rho",r],["mu",m]].forEach(([k,x])=>{if($("i_"+k)){$("u_"+k).selectedIndex=0;$("i_"+k).value=x;}});}
+
+function show(id){cur=M.find(m=>m.id===id);
+  document.querySelectorAll("#nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.id===id));
+  $("title").textContent=cur.name;$("desc").textContent=cur.desc;
+  $("fields").innerHTML=cur.f.map(f=>`<label class="fld"><span>${f.l}</span><div class="row"><input id="i_${f.k}" inputmode="decimal" autocomplete="off" placeholder="${f.o}"><select id="u_${f.k}" aria-label="Unidad de ${f.l}">${U[f.t].map((u,i)=>`<option${i===f.d?" selected":""}>${u[0]}</option>`).join("")}</select></div></label>`).join("");
+  $("out").hidden=true;$("pstat").textContent="";applyFluid();}
+
+function calc(){OS=[];OR=[];const out=$("out");out.hidden=false;
+  try{const v={};cur.f.forEach(f=>v[f.k]=read(f));cur.solve(v);
+    $("res").innerHTML=OR.map(([l,t])=>`<div><small>${l}</small><b>${t}</b></div>`).join("");
+    $("steps").innerHTML=OS.map(s=>`<li>${s}</li>`).join("");}
+  catch(e){$("res").innerHTML=`<p class="err">${typeof e==="string"?e:"Error: "+e.message}</p>`;$("steps").innerHTML="";}}
+
+/* ---------- Lector de texto: entiende "D = 5 cm", "5 cm de diámetro", "50.000 Pa", "3,5×10^-6" ---------- */
+const NUM="(-?\\d+(?:[.,]\\d+)*(?:e[+-]?\\d+)?)",UNIT="([a-zA-Zµ][a-zA-Z0-9µ³²·\\/\\^]*)?",LB="(?<![a-zA-Z0-9ρμνεηΣΔδ])";
+const strip=s=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+const esc=a=>a.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+function cleanTxt(t){
+  const sup={"⁰":0,"¹":1,"²":2,"³":3,"⁴":4,"⁵":5,"⁶":6,"⁷":7,"⁸":8,"⁹":9};
+  t=t.replace(/10\s*([⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g,(m,s)=>"10^"+s.replace(/⁻/g,"-").replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g,c=>sup[c]));
+  t=t.replace(/[−–]/g,"-");
+  t=t.replace(/(\d)\s*[×x*·]\s*10\s*(?:\^\s*\(?\s*(-?\d+)\)?|(-\d+))/gi,(m,a,b,c)=>a+"e"+(b||c));
+  return strip(t);}
+function toNum(t){let e="";const m=t.match(/e[+-]?\d+$/i);if(m){e=m[0];t=t.slice(0,-e.length);}
+  if(t.includes(",")&&t.includes("."))t=t.replace(/\./g,"").replace(",",".");
+  else if((t.match(/,/g)||[]).length>1)t=t.replace(/,/g,"");
+  else if(t.includes(","))t=t.replace(",",".");
+  else if(/^[1-9]\d{0,2}(\.\d{3})+$/.test(t))t=t.replace(/\./g,"");
+  return Number(t+e);}
+function parse(raw){
+  const txt=cleanTxt(raw),low=txt.toLowerCase();
+  for(const[n,i]of FLNAMES)if(low.includes(n)){$("fl").value=i;applyFluid();break;}
+  const done=[];
+  cur.f.forEach(f=>{
+    const al=f.a.map(strip);let hit=null;
+    for(const a of al){ /* palabra y luego número: "D = 5 cm", "caudal de 20 L/s" */
+      const m=txt.match(new RegExp(LB+esc(a)+"(?![a-zA-Z0-9])\\s*(?:=|:|es de|vale|de|del|es|igual a|a)?\\s*"+NUM+"\\s*"+UNIT,"i"));
+      if(m){hit=[m[1],m[2]];break;}}
+    if(!hit)for(const a of al){ /* número y luego palabra: "5 cm de diámetro" */
+      if(a.length<4||!/^[a-z ]+$/i.test(a))continue;
+      const m=txt.match(new RegExp(NUM+"\\s*"+UNIT+"\\s*(?:de|del|en)?\\s*(?<![a-zA-Z0-9])"+esc(a)+"(?![a-zA-Z0-9])","i"));
+      if(m){hit=[m[1],m[2]];break;}}
+    if(!hit)return;
+    const val=toNum(hit[0]);if(isNaN(val))return;
+    $("i_"+f.k).value=String(val);
+    if(hit[1]){const ix=U[f.t].findIndex(u=>norm(u[0])===norm(hit[1]));if(ix>=0)$("u_"+f.k).selectedIndex=ix;}
+    done.push(`${f.l} = ${val} ${U[f.t][$("u_"+f.k).selectedIndex][0]}`.replace(/ —$/,""));});
+  $("pstat").textContent=done.length?`Leí: ${done.join("; ")}. Revisa los valores y presiona Calcular.`:"No encontré datos. Prueba con el formato: D = 5 cm, V = 2 m/s.";}
+
+/* ---------- Modo IA: la IA solo LEE el problema; las cuentas las hace el código ---------- */
+const KT={};M.forEach(m=>m.f.forEach(f=>{KT[f.k]=KT[f.k]||f;}));
+let PLAN=null;
+const esc2=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const unitIdx=(t,s)=>s?U[t].findIndex(u=>norm(u[0])===norm(String(s))):-1;
+const imgB64=file=>new Promise(r=>{const im=new Image();im.onload=()=>{const s=Math.min(1,1600/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=im.width*s;c.height=im.height*s;c.getContext("2d").drawImage(im,0,0,c.width,c.height);r(c.toDataURL("image/jpeg",.85).split(",")[1]);};im.src=URL.createObjectURL(file);});
+
+async function analizar(){
+  const st=$("iastat"),txt=$("ptxt").value.trim(),file=$("img").files[0];
+  if(!txt&&!file){st.textContent="Escribe el problema o sube una imagen.";return;}
+  st.textContent="Leyendo el problema…";
+  try{
+    const catalogo=M.map(m=>({id:m.id,nombre:m.name,campos:m.f.map(f=>`${f.k}=${f.l} [${U[f.t].map(u=>u[0]).join(", ")}]`)}));
+    const r=await fetch("/.netlify/functions/leer",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({texto:txt,imagen:file?await imgB64(file):null,catalogo})});
+    const j=await r.json();if(!r.ok)throw new Error(j.error||"Error del servidor");
+    PLAN=j;drawPlan();st.textContent="";$("plan").scrollIntoView({behavior:"smooth"});
+  }catch(e){st.textContent="No pude usar la IA: "+e.message+" (solo funciona con la página publicada en Netlify).";}
+}
+
+function drawPlan(){
+  const d=[...(PLAN.datos||[])],fn=strip(String(PLAN.fluido||"")).toLowerCase(),fi=FLNAMES.find(([n])=>fn.includes(n));
+  if(fi){const f=FL[fi[1]];
+    if(!d.some(x=>x.k=="rho"))d.push({k:"rho",valor:f[1],unidad:"kg/m³",nota:"tabla: "+f[0]});
+    if(!d.some(x=>x.k=="mu"))d.push({k:"mu",valor:f[2],unidad:"Pa·s",nota:"tabla: "+f[0]});}
+  const rows=d.filter(x=>KT[x.k]).map(x=>{const f=KT[x.k],ix=Math.max(0,unitIdx(f.t,x.unidad));
+    return `<label class="fld dr" data-k="${x.k}"><span>${esc2(f.l)}${x.nota?" · "+esc2(x.nota):""}</span><div class="row"><input value="${esc2(x.valor)}"><select>${U[f.t].map((u,i)=>`<option${i===ix?" selected":""}>${u[0]}</option>`).join("")}</select></div></label>`;}).join("");
+  const inc=(PLAN.incisos||[]).map(i=>`<div class="ir row" data-id="${esc2(i.id)}" data-pide="${esc2(i.pide)}" style="align-items:center;margin-bottom:8px"><span style="flex:1"><b>${esc2(i.id)})</b> ${esc2(i.pide)}</span><select>${M.map(m=>`<option value="${m.id}"${m.id===i.modulo?" selected":""}>${m.name}</option>`).join("")}<option value="-"${M.some(m=>m.id===i.modulo)?"":" selected"}>Sin módulo</option></select></div>`).join("");
+  $("plan").innerHTML=`<h3>Confirma lo que entendí</h3><p class="stat">La IA puede leer mal un dato. Corrige valores o unidades, y el módulo de cada inciso, antes de calcular. Deja un dato vacío para ignorarlo.</p><div class="grid">${rows}</div><h3 style="margin-top:16px">Incisos</h3>${inc}<div class="btns"><button class="b" id="brun" type="button">Calcular todo</button></div>`;
+  $("brun").onclick=correr;$("plan").hidden=false;$("iaout").innerHTML="";
+}
+
+function correr(){
+  const pool={};
+  document.querySelectorAll("#plan .dr").forEach(r=>{const t=r.querySelector("input").value.trim();if(t==="")return;
+    const n=toNum(t.replace(/\s/g,""));if(isNaN(n))return;pool[r.dataset.k]=n*U[KT[r.dataset.k].t][r.querySelector("select").selectedIndex][1];});
+  let html="";
+  document.querySelectorAll("#plan .ir").forEach(r=>{
+    html+=`<section class="card"><h3>Inciso ${esc2(r.dataset.id)}) ${esc2(r.dataset.pide)}</h3>`;
+    const m=M.find(x=>x.id===r.querySelector("select").value);
+    if(!m){html+=`<p class="err">No tengo un módulo de cálculo para este inciso. Resuélvelo manualmente.</p></section>`;return;}
+    OS=[];OR=[];for(const k in OUT)delete OUT[k];
+    try{const v={};m.f.forEach(f=>v[f.k]=pool[f.k]??null);m.solve(v);Object.assign(pool,OUT);
+      html+=`<div class="res">${OR.map(([l,t])=>`<div><small>${l}</small><b>${t}</b></div>`).join("")}</div><ol>${OS.map(s=>`<li>${s}</li>`).join("")}</ol>`;}
+    catch(e){html+=`<p class="err">${esc2(typeof e==="string"?e:e.message)}</p>`;}
+    html+="</section>";});
+  $("iaout").innerHTML=html;
+}
+
+/* ---------- Arranque ---------- */
+$("nav").innerHTML=M.map(m=>`<button type="button" data-id="${m.id}">${m.name}</button>`).join("");
+$("nav").onclick=e=>{if(e.target.dataset.id)show(e.target.dataset.id);};
+$("fl").innerHTML=FL.map((f,i)=>`<option value="${i}">${f[0]}</option>`).join("")+`<option value="c">Personalizado (escribo ρ y μ)</option>`;
+$("fl").onchange=applyFluid;
+$("bcalc").onclick=calc;
+$("bparse").onclick=()=>parse($("ptxt").value);
+$("bia").onclick=analizar;
+$("bclear").onclick=()=>{show(cur.id);};
+$("img").onchange=e=>{const f=e.target.files[0],p=$("prev");if(!f)return;p.src=URL.createObjectURL(f);p.style.display="block";};
+show(M[0].id);
+</script>
+</body>
+</html>
